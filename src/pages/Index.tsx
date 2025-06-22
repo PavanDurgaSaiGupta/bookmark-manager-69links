@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Github, Grid, List, ExternalLink, Trash2, FolderPlus, Folder, Moon, Sun, Download, StickyNote, FileText } from 'lucide-react';
+import { Plus, Search, Github, Grid, List, ExternalLink, Trash2, FolderPlus, Folder, Moon, Sun, Download, StickyNote, FileText, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,6 +56,8 @@ const Index = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAddFolderModalOpen, setIsAddFolderModalOpen] = useState(false);
   const [isAddNoteModalOpen, setIsAddNoteModalOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
 
@@ -68,9 +69,22 @@ const Index = () => {
     }
   }, []);
 
+  // Auto-sync every 5 seconds
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const syncInterval = setInterval(() => {
+      console.log('Auto-syncing to GitHub...');
+      saveToGitHub(bookmarks, notes, folders, true);
+    }, 5000);
+
+    return () => clearInterval(syncInterval);
+  }, [isAuthenticated, bookmarks, notes, folders]);
+
   const loadDataFromGitHub = async () => {
     try {
       console.log('Loading data from GitHub...');
+      setIsSyncing(true);
       
       // Load bookmarks
       try {
@@ -85,7 +99,7 @@ const Index = () => {
           const bookmarksData = await bookmarksResponse.json();
           const bookmarksContent = JSON.parse(atob(bookmarksData.content));
           setBookmarks(bookmarksContent);
-          console.log('Bookmarks loaded from GitHub');
+          console.log('Bookmarks loaded from GitHub:', bookmarksContent.length);
         }
       } catch (error) {
         console.log('No existing bookmarks file found');
@@ -104,7 +118,7 @@ const Index = () => {
           const notesData = await notesResponse.json();
           const notesContent = JSON.parse(atob(notesData.content));
           setNotes(notesContent);
-          console.log('Notes loaded from GitHub');
+          console.log('Notes loaded from GitHub:', notesContent.length);
         }
       } catch (error) {
         console.log('No existing notes file found');
@@ -123,15 +137,16 @@ const Index = () => {
           const foldersData = await foldersResponse.json();
           const foldersContent = JSON.parse(atob(foldersData.content));
           setFolders(foldersContent);
-          console.log('Folders loaded from GitHub');
+          console.log('Folders loaded from GitHub:', foldersContent.length);
         }
       } catch (error) {
         console.log('No existing folders file found');
       }
 
+      setLastSyncTime(new Date());
     } catch (error) {
       console.error('Error loading from GitHub:', error);
-      // Initialize with sample data
+      // Initialize with sample data if GitHub fails
       const sampleFolders: Folder[] = [
         {
           id: '1',
@@ -149,12 +164,22 @@ const Index = () => {
 
       setFolders(sampleFolders);
       saveToGitHub([], [], sampleFolders);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
-  const saveToGitHub = async (bookmarksData: Bookmark[], notesData: Note[], foldersData: Folder[]) => {
+  const saveToGitHub = async (bookmarksData: Bookmark[], notesData: Note[], foldersData: Folder[], isAutoSync = false) => {
     try {
-      console.log('Saving to GitHub...');
+      if (!isAutoSync) {
+        setIsSyncing(true);
+      }
+      
+      console.log('Saving to GitHub...', { 
+        bookmarks: bookmarksData.length, 
+        notes: notesData.length, 
+        folders: foldersData.length 
+      });
 
       // Get existing file SHAs for updates
       const getFileSha = async (filename: string) => {
@@ -179,14 +204,14 @@ const Index = () => {
       const bookmarksSha = await getFileSha('bookmarks.json');
       const bookmarksContent = btoa(JSON.stringify(bookmarksData, null, 2));
       const bookmarksPayload: any = {
-        message: 'Update bookmarks',
+        message: `Update bookmarks - ${new Date().toISOString()}`,
         content: bookmarksContent,
       };
       if (bookmarksSha) {
         bookmarksPayload.sha = bookmarksSha;
       }
 
-      await fetch(`${GITHUB_API_URL}/bookmarks.json`, {
+      const bookmarksResponse = await fetch(`${GITHUB_API_URL}/bookmarks.json`, {
         method: 'PUT',
         headers: {
           'Authorization': `token ${GITHUB_TOKEN}`,
@@ -199,14 +224,14 @@ const Index = () => {
       const notesSha = await getFileSha('notes.json');
       const notesContent = btoa(JSON.stringify(notesData, null, 2));
       const notesPayload: any = {
-        message: 'Update notes',
+        message: `Update notes - ${new Date().toISOString()}`,
         content: notesContent,
       };
       if (notesSha) {
         notesPayload.sha = notesSha;
       }
 
-      await fetch(`${GITHUB_API_URL}/notes.json`, {
+      const notesResponse = await fetch(`${GITHUB_API_URL}/notes.json`, {
         method: 'PUT',
         headers: {
           'Authorization': `token ${GITHUB_TOKEN}`,
@@ -219,14 +244,14 @@ const Index = () => {
       const foldersSha = await getFileSha('folders.json');
       const foldersContent = btoa(JSON.stringify(foldersData, null, 2));
       const foldersPayload: any = {
-        message: 'Update folders',
+        message: `Update folders - ${new Date().toISOString()}`,
         content: foldersContent,
       };
       if (foldersSha) {
         foldersPayload.sha = foldersSha;
       }
 
-      await fetch(`${GITHUB_API_URL}/folders.json`, {
+      const foldersResponse = await fetch(`${GITHUB_API_URL}/folders.json`, {
         method: 'PUT',
         headers: {
           'Authorization': `token ${GITHUB_TOKEN}`,
@@ -235,19 +260,45 @@ const Index = () => {
         body: JSON.stringify(foldersPayload),
       });
 
-      console.log('Successfully saved to GitHub');
-      toast({
-        title: "Synced to GitHub",
-        description: "Your data has been saved to the repository.",
-      });
+      if (bookmarksResponse.ok && notesResponse.ok && foldersResponse.ok) {
+        console.log('Successfully saved to GitHub');
+        setLastSyncTime(new Date());
+        
+        if (!isAutoSync) {
+          toast({
+            title: "Synced to GitHub",
+            description: "Your data has been saved to the repository.",
+          });
+        }
+      } else {
+        throw new Error('Failed to save some files');
+      }
     } catch (error) {
       console.error('GitHub sync error:', error);
-      toast({
-        title: "Sync failed",
-        description: "Failed to save to GitHub repository. Check console for details.",
-        variant: "destructive",
-      });
+      if (!isAutoSync) {
+        toast({
+          title: "Sync failed",
+          description: "Failed to save to GitHub repository. Check console for details.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      if (!isAutoSync) {
+        setIsSyncing(false);
+      }
     }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('6^^9-auth');
+    setIsAuthenticated(false);
+    setBookmarks([]);
+    setNotes([]);
+    setFolders([]);
+    toast({
+      title: "Logged out",
+      description: "You have been successfully logged out.",
+    });
   };
 
   const filteredBookmarks = bookmarks.filter(bookmark => {
@@ -387,8 +438,13 @@ const Index = () => {
               <div className="hidden sm:block text-sm text-muted-foreground">:: TooManyTabs</div>
               <Badge variant="outline" className="text-xs hidden md:inline-flex">
                 <Github className="w-3 h-3 mr-1" />
-                GitHub
+                {isSyncing ? 'Syncing...' : 'GitHub'}
               </Badge>
+              {lastSyncTime && (
+                <div className="hidden lg:block text-xs text-muted-foreground">
+                  Last sync: {lastSyncTime.toLocaleTimeString()}
+                </div>
+              )}
             </div>
             
             <div className="flex items-center space-x-2">
@@ -436,6 +492,15 @@ const Index = () => {
                 className="hidden md:flex"
               >
                 <Download className="h-4 w-4" />
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLogout}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                <LogOut className="h-4 w-4" />
               </Button>
             </div>
           </div>
