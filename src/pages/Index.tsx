@@ -40,9 +40,9 @@ interface Folder {
   dateCreated: string;
 }
 
-// Updated repository configuration
+// Updated repository configuration with new fine-grained token
 const GITHUB_REPO = 'https://github.com/PavanDurgaSaiGupta/BOOKMARKSTOOLS';
-const GITHUB_TOKEN = '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';
+const GITHUB_TOKEN = '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';
 const GITHUB_API_URL = 'https://api.github.com/repos/PavanDurgaSaiGupta/BOOKMARKSTOOLS/contents';
 
 const Index = () => {
