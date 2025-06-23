@@ -40,9 +40,10 @@ interface Folder {
   dateCreated: string;
 }
 
-const GITHUB_REPO = 'https://github.com/PavanDurgaSaiGupta/TooManyTabs';
+// Updated repository configuration
+const GITHUB_REPO = 'https://github.com/PavanDurgaSaiGupta/BOOKMARKSTOOLS';
 const GITHUB_TOKEN = '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';
-const GITHUB_API_URL = 'https://api.github.com/repos/PavanDurgaSaiGupta/TooManyTabs/contents';
+const GITHUB_API_URL = 'https://api.github.com/repos/PavanDurgaSaiGupta/BOOKMARKSTOOLS/contents';
 
 const Index = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -62,7 +63,8 @@ const Index = () => {
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-  const [gitHubConnected, setGitHubConnected] = useState(true);
+  const [gitHubConnected, setGitHubConnected] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'error' | 'disconnected'>('disconnected');
   const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
 
@@ -70,7 +72,7 @@ const Index = () => {
     const authStatus = localStorage.getItem('6^^9-auth');
     if (authStatus === 'authenticated') {
       setIsAuthenticated(true);
-      loadDataFromGitHub();
+      initializeGitHubConnection();
     }
   }, []);
 
@@ -86,9 +88,20 @@ const Index = () => {
     return () => clearInterval(syncInterval);
   }, [isAuthenticated, bookmarks, notes, folders, gitHubConnected]);
 
+  const initializeGitHubConnection = async () => {
+    console.log('Initializing GitHub connection...');
+    const connected = await testGitHubConnection();
+    if (connected) {
+      loadDataFromGitHub();
+    }
+  };
+
   const testGitHubConnection = async () => {
     try {
-      const response = await fetch(`https://api.github.com/repos/PavanDurgaSaiGupta/TooManyTabs`, {
+      setSyncStatus('syncing');
+      console.log('Testing GitHub connection...');
+      
+      const response = await fetch(`https://api.github.com/repos/PavanDurgaSaiGupta/BOOKMARKSTOOLS`, {
         headers: {
           'Authorization': `token ${GITHUB_TOKEN}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -97,16 +110,33 @@ const Index = () => {
       
       if (response.ok) {
         setGitHubConnected(true);
+        setSyncStatus('connected');
         console.log('GitHub connection successful');
+        toast({
+          title: "GitHub Connected",
+          description: "Successfully connected to GitHub repository.",
+        });
         return true;
       } else {
-        console.error('GitHub connection failed:', response.status);
+        console.error('GitHub connection failed:', response.status, await response.text());
         setGitHubConnected(false);
+        setSyncStatus('error');
+        toast({
+          title: "GitHub Connection Failed",
+          description: `Failed to connect: ${response.status}. Please check your token and repository.`,
+          variant: "destructive",
+        });
         return false;
       }
     } catch (error) {
       console.error('GitHub connection error:', error);
       setGitHubConnected(false);
+      setSyncStatus('error');
+      toast({
+        title: "Connection Error",
+        description: "Unable to connect to GitHub. Please check your internet connection.",
+        variant: "destructive",
+      });
       return false;
     }
   };
@@ -115,16 +145,7 @@ const Index = () => {
     try {
       console.log('Loading data from GitHub...');
       setIsSyncing(true);
-      
-      const connected = await testGitHubConnection();
-      if (!connected) {
-        toast({
-          title: "GitHub Connection Failed",
-          description: "Unable to connect to GitHub repository. Please check your connection.",
-          variant: "destructive",
-        });
-        return;
-      }
+      setSyncStatus('syncing');
 
       // Load bookmarks
       try {
@@ -140,9 +161,13 @@ const Index = () => {
           const bookmarksContent = JSON.parse(atob(bookmarksData.content));
           setBookmarks(bookmarksContent);
           console.log('Bookmarks loaded from GitHub:', bookmarksContent.length);
+        } else {
+          console.log('No existing bookmarks file found, starting fresh');
+          setBookmarks([]);
         }
       } catch (error) {
         console.log('No existing bookmarks file found');
+        setBookmarks([]);
       }
 
       // Load notes
@@ -159,9 +184,13 @@ const Index = () => {
           const notesContent = JSON.parse(atob(notesData.content));
           setNotes(notesContent);
           console.log('Notes loaded from GitHub:', notesContent.length);
+        } else {
+          console.log('No existing notes file found, starting fresh');
+          setNotes([]);
         }
       } catch (error) {
         console.log('No existing notes file found');
+        setNotes([]);
       }
 
       // Load folders
@@ -178,10 +207,18 @@ const Index = () => {
           const foldersContent = JSON.parse(atob(foldersData.content));
           setFolders(foldersContent);
           console.log('Folders loaded from GitHub:', foldersContent.length);
+        } else {
+          console.log('No existing folders file found, creating default folder');
+          const defaultFolder: Folder = {
+            id: '1',
+            name: 'General',
+            color: '#3B82F6',
+            dateCreated: new Date().toISOString().split('T')[0]
+          };
+          setFolders([defaultFolder]);
         }
       } catch (error) {
-        console.log('No existing folders file found');
-        // Create default folder if none exist
+        console.log('No existing folders file found, creating default folder');
         const defaultFolder: Folder = {
           id: '1',
           name: 'General',
@@ -192,12 +229,14 @@ const Index = () => {
       }
 
       setLastSyncTime(new Date());
+      setSyncStatus('connected');
       toast({
         title: "Data Loaded",
         description: "Successfully loaded data from GitHub repository.",
       });
     } catch (error) {
       console.error('Error loading from GitHub:', error);
+      setSyncStatus('error');
       toast({
         title: "Load Failed",
         description: "Failed to load data from GitHub repository.",
@@ -217,6 +256,7 @@ const Index = () => {
     try {
       if (!isAutoSync) {
         setIsSyncing(true);
+        setSyncStatus('syncing');
       }
       
       console.log('Saving to GitHub...', { 
@@ -282,6 +322,7 @@ const Index = () => {
 
       console.log('Successfully saved all data to GitHub');
       setLastSyncTime(new Date());
+      setSyncStatus('connected');
       
       if (!isAutoSync) {
         toast({
@@ -292,6 +333,7 @@ const Index = () => {
     } catch (error) {
       console.error('GitHub sync error:', error);
       setGitHubConnected(false);
+      setSyncStatus('error');
       
       if (!isAutoSync) {
         toast({
@@ -313,6 +355,8 @@ const Index = () => {
     setBookmarks([]);
     setNotes([]);
     setFolders([]);
+    setGitHubConnected(false);
+    setSyncStatus('disconnected');
     toast({
       title: "Logged out",
       description: "You have been successfully logged out.",
@@ -321,12 +365,25 @@ const Index = () => {
 
   const handleGitHubConnect = (repoUrl: string) => {
     console.log('Connecting to GitHub repository:', repoUrl);
-    setGitHubConnected(true);
-    toast({
-      title: "GitHub Connected",
-      description: "Successfully connected to GitHub repository.",
-    });
-    loadDataFromGitHub();
+    initializeGitHubConnection();
+  };
+
+  const getStatusColor = () => {
+    switch (syncStatus) {
+      case 'connected': return 'text-green-600';
+      case 'syncing': return 'text-blue-600';
+      case 'error': return 'text-red-600';
+      default: return 'text-gray-600';
+    }
+  };
+
+  const getStatusText = () => {
+    switch (syncStatus) {
+      case 'connected': return 'Connected';
+      case 'syncing': return 'Syncing...';
+      case 'error': return 'Error';
+      default: return 'Disconnected';
+    }
   };
 
   const filteredBookmarks = bookmarks.filter(bookmark => {
@@ -510,15 +567,15 @@ const Index = () => {
                   6^^9 links
                 </div>
               </div>
-              <div className="hidden sm:block text-sm text-muted-foreground">:: TooManyTabs</div>
+              <div className="hidden sm:block text-sm text-muted-foreground">:: BookmarksTools</div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setIsGitHubModalOpen(true)}
-                className="text-xs hidden md:inline-flex"
+                className={`text-xs hidden md:inline-flex ${getStatusColor()}`}
               >
                 <Github className="w-3 h-3 mr-1" />
-                {gitHubConnected ? (isSyncing ? 'Syncing...' : 'Connected') : 'Disconnected'}
+                {getStatusText()}
               </Button>
               {lastSyncTime && gitHubConnected && (
                 <div className="hidden lg:block text-xs text-muted-foreground">
