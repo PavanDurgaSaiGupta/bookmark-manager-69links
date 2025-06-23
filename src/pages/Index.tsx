@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Github, Grid, List, ExternalLink, Trash2, FolderPlus, Folder, Moon, Sun, Download, StickyNote, FileText, LogOut, Edit, Settings } from 'lucide-react';
+import { Plus, Search, Github, Grid, List, ExternalLink, Trash2, FolderPlus, Folder, Moon, Sun, Download, StickyNote, FileText, LogOut, Edit, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AddBookmarkModal from '@/components/AddBookmarkModal';
 import AddFolderModal from '@/components/AddFolderModal';
 import AddNoteModal from '@/components/AddNoteModal';
-import GitHubConnectModal from '@/components/GitHubConnectModal';
 import AuthModal from '@/components/AuthModal';
 import { useToast } from '@/hooks/use-toast';
 import { useTheme } from '@/hooks/useTheme';
@@ -40,7 +39,7 @@ interface Folder {
   dateCreated: string;
 }
 
-// Updated repository configuration with new fine-grained token
+// GitHub configuration
 const GITHUB_REPO = 'https://github.com/PavanDurgaSaiGupta/BOOKMARKSTOOLS';
 const GITHUB_TOKEN = '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';
 const GITHUB_API_URL = 'https://api.github.com/repos/PavanDurgaSaiGupta/BOOKMARKSTOOLS/contents';
@@ -58,7 +57,6 @@ const Index = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAddFolderModalOpen, setIsAddFolderModalOpen] = useState(false);
   const [isAddNoteModalOpen, setIsAddNoteModalOpen] = useState(false);
-  const [isGitHubModalOpen, setIsGitHubModalOpen] = useState(false);
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -76,14 +74,14 @@ const Index = () => {
     }
   }, []);
 
-  // Auto-sync every 5 seconds
+  // Auto-sync every 10 seconds
   useEffect(() => {
     if (!isAuthenticated || !gitHubConnected) return;
 
     const syncInterval = setInterval(() => {
       console.log('Auto-syncing to GitHub...');
       saveToGitHub(bookmarks, notes, folders, true);
-    }, 5000);
+    }, 10000);
 
     return () => clearInterval(syncInterval);
   }, [isAuthenticated, bookmarks, notes, folders, gitHubConnected]);
@@ -92,6 +90,7 @@ const Index = () => {
     console.log('Initializing GitHub connection...');
     const connected = await testGitHubConnection();
     if (connected) {
+      await createFolderStructure();
       loadDataFromGitHub();
     }
   };
@@ -113,8 +112,8 @@ const Index = () => {
         setSyncStatus('connected');
         console.log('GitHub connection successful');
         toast({
-          title: "GitHub Connected",
-          description: "Successfully connected to GitHub repository.",
+          title: "🎉 GitHub Connected Successfully",
+          description: "Repository is now synced and ready to store your bookmarks and notes.",
         });
         return true;
       } else {
@@ -141,6 +140,37 @@ const Index = () => {
     }
   };
 
+  const createFolderStructure = async () => {
+    try {
+      console.log('Creating folder structure in GitHub...');
+      
+      // Create bookmarks folder structure
+      const folders = ['bookmarks', 'notes', 'data'];
+      
+      for (const folder of folders) {
+        try {
+          const readmeContent = btoa(`# ${folder.charAt(0).toUpperCase() + folder.slice(1)}\n\nThis folder contains ${folder} data for 6^^9 links application.\n\n## Structure\n- JSON files for data storage\n- HTML exports for browser compatibility\n- Organized by folders and categories\n`);
+          
+          await fetch(`${GITHUB_API_URL}/${folder}/README.md`, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `token ${GITHUB_TOKEN}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              message: `Create ${folder} folder structure`,
+              content: readmeContent,
+            }),
+          });
+        } catch (error) {
+          console.log(`Folder ${folder} may already exist`);
+        }
+      }
+    } catch (error) {
+      console.error('Error creating folder structure:', error);
+    }
+  };
+
   const loadDataFromGitHub = async () => {
     try {
       console.log('Loading data from GitHub...');
@@ -149,7 +179,7 @@ const Index = () => {
 
       // Load bookmarks
       try {
-        const bookmarksResponse = await fetch(`${GITHUB_API_URL}/bookmarks.json`, {
+        const bookmarksResponse = await fetch(`${GITHUB_API_URL}/data/bookmarks.json`, {
           headers: {
             'Authorization': `token ${GITHUB_TOKEN}`,
             'Accept': 'application/vnd.github.v3+json',
@@ -172,7 +202,7 @@ const Index = () => {
 
       // Load notes
       try {
-        const notesResponse = await fetch(`${GITHUB_API_URL}/notes.json`, {
+        const notesResponse = await fetch(`${GITHUB_API_URL}/data/notes.json`, {
           headers: {
             'Authorization': `token ${GITHUB_TOKEN}`,
             'Accept': 'application/vnd.github.v3+json',
@@ -195,7 +225,7 @@ const Index = () => {
 
       // Load folders
       try {
-        const foldersResponse = await fetch(`${GITHUB_API_URL}/folders.json`, {
+        const foldersResponse = await fetch(`${GITHUB_API_URL}/data/folders.json`, {
           headers: {
             'Authorization': `token ${GITHUB_TOKEN}`,
             'Accept': 'application/vnd.github.v3+json',
@@ -231,8 +261,8 @@ const Index = () => {
       setLastSyncTime(new Date());
       setSyncStatus('connected');
       toast({
-        title: "Data Loaded",
-        description: "Successfully loaded data from GitHub repository.",
+        title: "📂 Data Loaded Successfully",
+        description: "All your bookmarks, notes, and folders have been synced from GitHub.",
       });
     } catch (error) {
       console.error('Error loading from GitHub:', error);
@@ -266,9 +296,9 @@ const Index = () => {
       });
 
       // Get existing file SHAs for updates
-      const getFileSha = async (filename: string) => {
+      const getFileSha = async (filepath: string) => {
         try {
-          const response = await fetch(`${GITHUB_API_URL}/${filename}`, {
+          const response = await fetch(`${GITHUB_API_URL}/${filepath}`, {
             headers: {
               'Authorization': `token ${GITHUB_TOKEN}`,
               'Accept': 'application/vnd.github.v3+json',
@@ -279,13 +309,13 @@ const Index = () => {
             return data.sha;
           }
         } catch (error) {
-          console.log(`No existing ${filename} found`);
+          console.log(`No existing ${filepath} found`);
         }
         return null;
       };
 
-      const saveFile = async (filename: string, content: any, description: string) => {
-        const sha = await getFileSha(filename);
+      const saveFile = async (filepath: string, content: any, description: string) => {
+        const sha = await getFileSha(filepath);
         const encodedContent = btoa(JSON.stringify(content, null, 2));
         const payload: any = {
           message: `${description} - ${new Date().toISOString()}`,
@@ -295,7 +325,7 @@ const Index = () => {
           payload.sha = sha;
         }
 
-        const response = await fetch(`${GITHUB_API_URL}/${filename}`, {
+        const response = await fetch(`${GITHUB_API_URL}/${filepath}`, {
           method: 'PUT',
           headers: {
             'Authorization': `token ${GITHUB_TOKEN}`,
@@ -306,19 +336,22 @@ const Index = () => {
 
         if (!response.ok) {
           const errorData = await response.text();
-          console.error(`Failed to save ${filename}:`, errorData);
-          throw new Error(`Failed to save ${filename}: ${response.status}`);
+          console.error(`Failed to save ${filepath}:`, errorData);
+          throw new Error(`Failed to save ${filepath}: ${response.status}`);
         }
 
         return response;
       };
 
-      // Save all data files
+      // Save data files in proper structure
       await Promise.all([
-        saveFile('bookmarks.json', bookmarksData, 'Update bookmarks'),
-        saveFile('notes.json', notesData, 'Update notes'),
-        saveFile('folders.json', foldersData, 'Update folders')
+        saveFile('data/bookmarks.json', bookmarksData, 'Update bookmarks data'),
+        saveFile('data/notes.json', notesData, 'Update notes data'),
+        saveFile('data/folders.json', foldersData, 'Update folders data')
       ]);
+
+      // Create HTML exports for browser compatibility
+      await saveHTMLExports(bookmarksData, notesData, foldersData);
 
       console.log('Successfully saved all data to GitHub');
       setLastSyncTime(new Date());
@@ -326,13 +359,12 @@ const Index = () => {
       
       if (!isAutoSync) {
         toast({
-          title: "Synced to GitHub",
-          description: "Your data has been saved to the repository.",
+          title: "✅ Synced to GitHub",
+          description: "Your data has been saved with proper folder structure and HTML exports.",
         });
       }
     } catch (error) {
       console.error('GitHub sync error:', error);
-      setGitHubConnected(false);
       setSyncStatus('error');
       
       if (!isAutoSync) {
@@ -349,6 +381,159 @@ const Index = () => {
     }
   };
 
+  const saveHTMLExports = async (bookmarksData: Bookmark[], notesData: Note[], foldersData: Folder[]) => {
+    try {
+      // Create HTML bookmarks export (Netscape format for browser compatibility)
+      const htmlBookmarks = generateNetscapeBookmarks(bookmarksData, foldersData);
+      const htmlNotes = generateHTMLNotes(notesData, foldersData);
+      
+      const getFileSha = async (filepath: string) => {
+        try {
+          const response = await fetch(`${GITHUB_API_URL}/${filepath}`, {
+            headers: {
+              'Authorization': `token ${GITHUB_TOKEN}`,
+              'Accept': 'application/vnd.github.v3+json',
+            },
+          });
+          if (response.ok) {
+            const data = await response.json();
+            return data.sha;
+          }
+        } catch (error) {
+          console.log(`No existing ${filepath} found`);
+        }
+        return null;
+      };
+
+      const saveHTMLFile = async (filepath: string, content: string, description: string) => {
+        const sha = await getFileSha(filepath);
+        const encodedContent = btoa(content);
+        const payload: any = {
+          message: `${description} - ${new Date().toISOString()}`,
+          content: encodedContent,
+        };
+        if (sha) {
+          payload.sha = sha;
+        }
+
+        await fetch(`${GITHUB_API_URL}/${filepath}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `token ${GITHUB_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+      };
+
+      await Promise.all([
+        saveHTMLFile('bookmarks/bookmarks.html', htmlBookmarks, 'Update HTML bookmarks export'),
+        saveHTMLFile('notes/notes.html', htmlNotes, 'Update HTML notes export')
+      ]);
+
+    } catch (error) {
+      console.error('Error saving HTML exports:', error);
+    }
+  };
+
+  const generateNetscapeBookmarks = (bookmarksData: Bookmark[], foldersData: Folder[]) => {
+    const timestamp = Math.floor(Date.now() / 1000);
+    
+    let html = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<!-- This is an automatically generated file. -->
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>6^^9 Links Bookmarks</TITLE>
+<H1>6^^9 Links Bookmarks</H1>
+<DL><p>
+`;
+
+    // Group bookmarks by folder
+    const bookmarksByFolder = new Map();
+    bookmarksData.forEach(bookmark => {
+      const folderId = bookmark.folderId || 'general';
+      if (!bookmarksByFolder.has(folderId)) {
+        bookmarksByFolder.set(folderId, []);
+      }
+      bookmarksByFolder.get(folderId).push(bookmark);
+    });
+
+    // Add bookmarks organized by folders
+    bookmarksByFolder.forEach((bookmarks, folderId) => {
+      const folder = foldersData.find(f => f.id === folderId);
+      const folderName = folder ? folder.name : 'General';
+      
+      html += `<DT><H3 ADD_DATE="${timestamp}" LAST_MODIFIED="${timestamp}">${folderName}</H3>\n<DL><p>\n`;
+      
+      bookmarks.forEach(bookmark => {
+        const addDate = Math.floor(new Date(bookmark.dateAdded).getTime() / 1000);
+        const description = bookmark.description ? ` - ${bookmark.description}` : '';
+        const notes = bookmark.notes ? ` | Notes: ${bookmark.notes}` : '';
+        const tags = bookmark.tags.length > 0 ? ` | Tags: ${bookmark.tags.join(', ')}` : '';
+        
+        html += `<DT><A HREF="${bookmark.url}" ADD_DATE="${addDate}" TAGS="${bookmark.tags.join(',')}">${bookmark.title}</A>\n`;
+        if (description || notes || tags) {
+          html += `<DD>${description}${notes}${tags}\n`;
+        }
+      });
+      
+      html += `</DL><p>\n`;
+    });
+
+    html += `</DL><p>`;
+    return html;
+  };
+
+  const generateHTMLNotes = (notesData: Note[], foldersData: Folder[]) => {
+    let html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>6^^9 Links Notes</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .note { border: 1px solid #ddd; margin: 20px 0; padding: 15px; border-radius: 5px; }
+        .note-title { font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+        .note-meta { color: #666; font-size: 0.9em; margin-bottom: 10px; }
+        .note-content { line-height: 1.6; white-space: pre-wrap; }
+        .folder-header { color: #333; border-bottom: 2px solid #eee; margin: 30px 0 20px 0; padding-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h1>6^^9 Links Notes Export</h1>
+    <p>Generated on: ${new Date().toLocaleString()}</p>
+`;
+
+    // Group notes by folder
+    const notesByFolder = new Map();
+    notesData.forEach(note => {
+      const folderId = note.folderId || 'general';
+      if (!notesByFolder.has(folderId)) {
+        notesByFolder.set(folderId, []);
+      }
+      notesByFolder.get(folderId).push(note);
+    });
+
+    // Add notes organized by folders
+    notesByFolder.forEach((notes, folderId) => {
+      const folder = foldersData.find(f => f.id === folderId);
+      const folderName = folder ? folder.name : 'General';
+      
+      html += `<h2 class="folder-header">${folderName}</h2>\n`;
+      
+      notes.forEach(note => {
+        html += `<div class="note">
+        <div class="note-title">${note.title}</div>
+        <div class="note-meta">Created: ${note.dateAdded}</div>
+        <div class="note-content">${note.content}</div>
+    </div>\n`;
+      });
+    });
+
+    html += `</body></html>`;
+    return html;
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('6^^9-auth');
     setIsAuthenticated(false);
@@ -361,11 +546,6 @@ const Index = () => {
       title: "Logged out",
       description: "You have been successfully logged out.",
     });
-  };
-
-  const handleGitHubConnect = (repoUrl: string) => {
-    console.log('Connecting to GitHub repository:', repoUrl);
-    initializeGitHubConnection();
   };
 
   const getStatusColor = () => {
@@ -383,6 +563,15 @@ const Index = () => {
       case 'syncing': return 'Syncing...';
       case 'error': return 'Error';
       default: return 'Disconnected';
+    }
+  };
+
+  const getStatusIcon = () => {
+    switch (syncStatus) {
+      case 'connected': return <CheckCircle className="w-3 h-3 mr-1" />;
+      case 'syncing': return <div className="w-3 h-3 mr-1 animate-spin border border-current border-t-transparent rounded-full" />;
+      case 'error': return <div className="w-3 h-3 mr-1 bg-red-500 rounded-full" />;
+      default: return <div className="w-3 h-3 mr-1 bg-gray-400 rounded-full" />;
     }
   };
 
@@ -415,8 +604,8 @@ const Index = () => {
     setBookmarks(updatedBookmarks);
     saveToGitHub(updatedBookmarks, notes, folders);
     toast({
-      title: "Bookmark added",
-      description: "Your bookmark has been saved and synced to GitHub.",
+      title: "📚 Bookmark added",
+      description: "Your bookmark has been saved and synced to GitHub with proper structure.",
     });
   };
 
@@ -428,7 +617,7 @@ const Index = () => {
     saveToGitHub(updatedBookmarks, notes, folders);
     setEditingBookmark(null);
     toast({
-      title: "Bookmark updated",
+      title: "✏️ Bookmark updated",
       description: "Your bookmark has been updated and synced to GitHub.",
     });
   };
@@ -443,8 +632,8 @@ const Index = () => {
     setNotes(updatedNotes);
     saveToGitHub(bookmarks, updatedNotes, folders);
     toast({
-      title: "Note added",
-      description: "Your note has been saved and synced to GitHub.",
+      title: "📝 Note added",
+      description: "Your note has been saved and synced to GitHub with proper structure.",
     });
   };
 
@@ -458,7 +647,7 @@ const Index = () => {
     setFolders(updatedFolders);
     saveToGitHub(bookmarks, notes, updatedFolders);
     toast({
-      title: "Folder created",
+      title: "📁 Folder created",
       description: "Your folder has been created and synced to GitHub.",
     });
   };
@@ -471,7 +660,7 @@ const Index = () => {
     saveToGitHub(bookmarks, notes, updatedFolders);
     setEditingFolder(null);
     toast({
-      title: "Folder updated",
+      title: "📁 Folder updated",
       description: "Your folder has been updated and synced to GitHub.",
     });
   };
@@ -481,7 +670,7 @@ const Index = () => {
     setBookmarks(updatedBookmarks);
     saveToGitHub(updatedBookmarks, notes, folders);
     toast({
-      title: "Bookmark deleted",
+      title: "🗑️ Bookmark deleted",
       description: "The bookmark has been removed and synced to GitHub.",
     });
   };
@@ -491,7 +680,7 @@ const Index = () => {
     setNotes(updatedNotes);
     saveToGitHub(bookmarks, updatedNotes, folders);
     toast({
-      title: "Note deleted",
+      title: "🗑️ Note deleted",
       description: "The note has been removed and synced to GitHub.",
     });
   };
@@ -512,7 +701,7 @@ const Index = () => {
     saveToGitHub(updatedBookmarks, updatedNotes, updatedFolders);
     
     toast({
-      title: "Folder deleted",
+      title: "🗑️ Folder deleted",
       description: "The folder has been deleted and items moved to general folder.",
     });
   };
@@ -549,6 +738,11 @@ const Index = () => {
     a.download = '6^^9-links-export.csv';
     a.click();
     URL.revokeObjectURL(url);
+    
+    toast({
+      title: "📊 Export Complete",
+      description: "Your data has been exported to CSV format.",
+    });
   };
 
   if (!isAuthenticated) {
@@ -558,7 +752,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
       {/* Header */}
-      <header className="border-b sticky top-0 z-40 bg-background/80 backdrop-blur-md">
+      <header className="border-b sticky top-0 z-40 bg-background/95 backdrop-blur-md shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-2 md:space-x-4">
@@ -568,15 +762,10 @@ const Index = () => {
                 </div>
               </div>
               <div className="hidden sm:block text-sm text-muted-foreground">:: BookmarksTools</div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsGitHubModalOpen(true)}
-                className={`text-xs hidden md:inline-flex ${getStatusColor()}`}
-              >
-                <Github className="w-3 h-3 mr-1" />
+              <div className={`text-xs flex items-center px-2 py-1 rounded-full border ${getStatusColor()}`}>
+                {getStatusIcon()}
                 {getStatusText()}
-              </Button>
+              </div>
               {lastSyncTime && gitHubConnected && (
                 <div className="hidden lg:block text-xs text-muted-foreground">
                   Last sync: {lastSyncTime.toLocaleTimeString()}
@@ -591,7 +780,7 @@ const Index = () => {
                   placeholder="Search..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 w-48 lg:w-64"
+                  className="pl-10 w-48 lg:w-64 transition-all duration-200 focus:w-56 lg:focus:w-72"
                 />
               </div>
               
@@ -600,7 +789,7 @@ const Index = () => {
                   variant={viewMode === 'grid' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setViewMode('grid')}
-                  className="hidden sm:flex"
+                  className="hidden sm:flex transition-all duration-200 hover:scale-105"
                 >
                   <Grid className="h-4 w-4" />
                 </Button>
@@ -608,7 +797,7 @@ const Index = () => {
                   variant={viewMode === 'list' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setViewMode('list')}
-                  className="hidden sm:flex"
+                  className="hidden sm:flex transition-all duration-200 hover:scale-105"
                 >
                   <List className="h-4 w-4" />
                 </Button>
@@ -618,6 +807,7 @@ const Index = () => {
                 variant="outline"
                 size="sm"
                 onClick={toggleTheme}
+                className="transition-all duration-200 hover:scale-105"
               >
                 {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </Button>
@@ -626,7 +816,7 @@ const Index = () => {
                 variant="outline"
                 size="sm"
                 onClick={exportToCSV}
-                className="hidden md:flex"
+                className="hidden md:flex transition-all duration-200 hover:scale-105"
               >
                 <Download className="h-4 w-4" />
               </Button>
@@ -635,7 +825,7 @@ const Index = () => {
                 variant="outline"
                 size="sm"
                 onClick={handleLogout}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                className="text-red-600 hover:text-red-700 hover:bg-red-50 transition-all duration-200 hover:scale-105"
               >
                 <LogOut className="h-4 w-4" />
               </Button>
@@ -666,7 +856,7 @@ const Index = () => {
             <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
               <Button
                 onClick={() => setIsAddModalOpen(true)}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all duration-200 hover:scale-105 shadow-lg hover:shadow-xl"
               >
                 <Plus className="mr-2 h-4 w-4" />
                 Add Bookmark
@@ -674,7 +864,7 @@ const Index = () => {
               
               <Button
                 onClick={() => setIsAddNoteModalOpen(true)}
-                className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 transition-all duration-200 hover:scale-105 shadow-lg hover:shadow-xl"
               >
                 <StickyNote className="mr-2 h-4 w-4" />
                 Add Note
@@ -683,7 +873,7 @@ const Index = () => {
               <Button
                 onClick={() => setIsAddFolderModalOpen(true)}
                 variant="outline"
-                className="col-span-2 lg:col-span-1"
+                className="col-span-2 lg:col-span-1 transition-all duration-200 hover:scale-105 border-dashed hover:border-solid"
               >
                 <FolderPlus className="mr-2 h-4 w-4" />
                 Add Folder
@@ -691,62 +881,76 @@ const Index = () => {
             </div>
 
             {/* Folders */}
-            <div>
-              <h3 className="font-medium mb-3">Folders</h3>
+            <div className="space-y-3">
+              <h3 className="font-medium text-sm uppercase tracking-wider text-muted-foreground">Folders</h3>
               <div className="space-y-1">
                 <Button
                   variant={selectedFolder === '' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setSelectedFolder('')}
-                  className="w-full justify-start"
+                  className="w-full justify-start transition-all duration-200 hover:scale-105"
                 >
                   <Folder className="mr-2 h-4 w-4" />
                   All Items
+                  <Badge variant="secondary" className="ml-auto">
+                    {bookmarks.length + notes.length}
+                  </Badge>
                 </Button>
-                {folders.map(folder => (
-                  <div key={folder.id} className="flex items-center group">
-                    <Button
-                      variant={selectedFolder === folder.id ? 'default' : 'ghost'}
-                      size="sm"
-                      onClick={() => setSelectedFolder(folder.id)}
-                      className="w-full justify-start flex-1"
-                    >
-                      <div 
-                        className="w-3 h-3 rounded-full mr-2" 
-                        style={{ backgroundColor: folder.color }}
-                      />
-                      {folder.name}
-                    </Button>
-                    <div className="opacity-0 group-hover:opacity-100 flex space-x-1 ml-2">
+                {folders.map(folder => {
+                  const folderItemCount = bookmarks.filter(b => b.folderId === folder.id).length + 
+                                         notes.filter(n => n.folderId === folder.id).length;
+                  
+                  return (
+                    <div key={folder.id} className="flex items-center group">
                       <Button
-                        variant="ghost"
+                        variant={selectedFolder === folder.id ? 'default' : 'ghost'}
                         size="sm"
-                        onClick={() => setEditingFolder(folder)}
+                        onClick={() => setSelectedFolder(folder.id)}
+                        className="w-full justify-start flex-1 transition-all duration-200 hover:scale-105"
                       >
-                        <Edit className="h-3 w-3" />
+                        <div 
+                          className="w-3 h-3 rounded-full mr-2 shadow-sm" 
+                          style={{ backgroundColor: folder.color }}
+                        />
+                        {folder.name}
+                        <Badge variant="secondary" className="ml-auto">
+                          {folderItemCount}
+                        </Badge>
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteFolder(folder.id)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                      <div className="opacity-0 group-hover:opacity-100 flex space-x-1 ml-2 transition-opacity duration-200">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setEditingFolder(folder)}
+                          className="h-8 w-8 p-0 hover:scale-110 transition-all duration-200"
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteFolder(folder.id)}
+                          className="h-8 w-8 p-0 hover:scale-110 transition-all duration-200 text-red-500 hover:text-red-700"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
             {/* Tags */}
             {allTags.length > 0 && (
-              <div className="hidden lg:block">
-                <h3 className="font-medium mb-3">Tags</h3>
+              <div className="hidden lg:block space-y-3">
+                <h3 className="font-medium text-sm uppercase tracking-wider text-muted-foreground">Tags</h3>
                 <div className="flex flex-wrap gap-1">
                   <Button
                     variant={selectedTag === '' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setSelectedTag('')}
+                    className="transition-all duration-200 hover:scale-105"
                   >
                     All
                   </Button>
@@ -756,6 +960,7 @@ const Index = () => {
                       variant={selectedTag === tag ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => setSelectedTag(tag)}
+                      className="transition-all duration-200 hover:scale-105"
                     >
                       {tag}
                     </Button>
@@ -768,20 +973,20 @@ const Index = () => {
           {/* Content */}
           <div className="flex-1">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="bookmarks" className="flex items-center space-x-2">
+              <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsTrigger value="bookmarks" className="flex items-center space-x-2 transition-all duration-200">
                   <ExternalLink className="h-4 w-4" />
                   <span>Bookmarks ({filteredBookmarks.length})</span>
                 </TabsTrigger>
-                <TabsTrigger value="notes" className="flex items-center space-x-2">
+                <TabsTrigger value="notes" className="flex items-center space-x-2 transition-all duration-200">
                   <FileText className="h-4 w-4" />
                   <span>Notes ({filteredNotes.length})</span>
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="bookmarks" className="mt-6">
+              <TabsContent value="bookmarks">
                 {filteredBookmarks.length === 0 ? (
-                  <div className="text-center py-12">
+                  <div className="text-center py-12 animate-fade-in">
                     <div className="text-6xl mb-4">📚</div>
                     <h3 className="text-lg font-medium mb-2">No bookmarks found</h3>
                     <p className="text-muted-foreground mb-6">
@@ -790,7 +995,7 @@ const Index = () => {
                     {!searchQuery && !selectedTag && !selectedFolder && (
                       <Button
                         onClick={() => setIsAddModalOpen(true)}
-                        className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                        className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all duration-200 hover:scale-105 shadow-lg hover:shadow-xl"
                       >
                         <Plus className="mr-2 h-4 w-4" />
                         Add Your First Bookmark
@@ -802,8 +1007,15 @@ const Index = () => {
                     ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'
                     : 'space-y-3'
                   }>
-                    {filteredBookmarks.map(bookmark => (
-                      <Card key={bookmark.id} className="group hover:shadow-lg transition-all duration-200 hover:scale-[1.02]">
+                    {filteredBookmarks.map((bookmark, index) => (
+                      <Card 
+                        key={bookmark.id} 
+                        className="group hover:shadow-xl transition-all duration-300 hover:scale-[1.02] border-l-4 animate-fade-in"
+                        style={{ 
+                          borderLeftColor: folders.find(f => f.id === bookmark.folderId)?.color || '#3B82F6',
+                          animationDelay: `${index * 50}ms`
+                        }}
+                      >
                         <CardHeader className="pb-3">
                           <div className="flex items-start justify-between">
                             <div className="flex items-center space-x-2 min-w-0 flex-1">
@@ -817,8 +1029,8 @@ const Index = () => {
                                 </CardDescription>
                               </div>
                             </div>
-                            <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Button variant="ghost" size="sm" asChild>
+                            <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
+                              <Button variant="ghost" size="sm" asChild className="hover:scale-110 transition-all duration-200">
                                 <a href={bookmark.url} target="_blank" rel="noopener noreferrer">
                                   <ExternalLink className="h-3 w-3" />
                                 </a>
@@ -827,6 +1039,7 @@ const Index = () => {
                                 variant="ghost" 
                                 size="sm"
                                 onClick={() => setEditingBookmark(bookmark)}
+                                className="hover:scale-110 transition-all duration-200"
                               >
                                 <Edit className="h-3 w-3" />
                               </Button>
@@ -834,6 +1047,7 @@ const Index = () => {
                                 variant="ghost" 
                                 size="sm"
                                 onClick={() => handleDeleteBookmark(bookmark.id)}
+                                className="hover:scale-110 transition-all duration-200 text-red-500 hover:text-red-700"
                               >
                                 <Trash2 className="h-3 w-3" />
                               </Button>
@@ -858,7 +1072,7 @@ const Index = () => {
                             {bookmark.tags.length > 0 && (
                               <div className="flex flex-wrap gap-1">
                                 {bookmark.tags.map(tag => (
-                                  <Badge key={tag} variant="secondary" className="text-xs">
+                                  <Badge key={tag} variant="secondary" className="text-xs hover:scale-105 transition-all duration-200">
                                     {tag}
                                   </Badge>
                                 ))}
@@ -872,9 +1086,9 @@ const Index = () => {
                 )}
               </TabsContent>
 
-              <TabsContent value="notes" className="mt-6">
+              <TabsContent value="notes">
                 {filteredNotes.length === 0 ? (
-                  <div className="text-center py-12">
+                  <div className="text-center py-12 animate-fade-in">
                     <div className="text-6xl mb-4">📝</div>
                     <h3 className="text-lg font-medium mb-2">No notes found</h3>
                     <p className="text-muted-foreground mb-6">
@@ -883,7 +1097,7 @@ const Index = () => {
                     {!searchQuery && !selectedFolder && (
                       <Button
                         onClick={() => setIsAddNoteModalOpen(true)}
-                        className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                        className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 transition-all duration-200 hover:scale-105 shadow-lg hover:shadow-xl"
                       >
                         <StickyNote className="mr-2 h-4 w-4" />
                         Add Your First Note
@@ -895,8 +1109,15 @@ const Index = () => {
                     ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'
                     : 'space-y-3'
                   }>
-                    {filteredNotes.map(note => (
-                      <Card key={note.id} className="group hover:shadow-lg transition-all duration-200 hover:scale-[1.02]">
+                    {filteredNotes.map((note, index) => (
+                      <Card 
+                        key={note.id} 
+                        className="group hover:shadow-xl transition-all duration-300 hover:scale-[1.02] border-l-4 animate-fade-in"
+                        style={{ 
+                          borderLeftColor: folders.find(f => f.id === note.folderId)?.color || '#F59E0B',
+                          animationDelay: `${index * 50}ms`
+                        }}
+                      >
                         <CardHeader className="pb-3">
                           <div className="flex items-start justify-between">
                             <div className="flex items-center space-x-2 min-w-0 flex-1">
@@ -910,11 +1131,12 @@ const Index = () => {
                                 </CardDescription>
                               </div>
                             </div>
-                            <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
                               <Button 
                                 variant="ghost" 
                                 size="sm"
                                 onClick={() => handleDeleteNote(note.id)}
+                                className="hover:scale-110 transition-all duration-200 text-red-500 hover:text-red-700"
                               >
                                 <Trash2 className="h-3 w-3" />
                               </Button>
@@ -963,13 +1185,6 @@ const Index = () => {
         }}
         onAdd={editingFolder ? handleEditFolder : handleAddFolder}
         editingFolder={editingFolder}
-      />
-
-      <GitHubConnectModal
-        isOpen={isGitHubModalOpen}
-        onClose={() => setIsGitHubModalOpen(false)}
-        onConnect={handleGitHubConnect}
-        currentRepo={gitHubConnected ? GITHUB_REPO : undefined}
       />
     </div>
   );
