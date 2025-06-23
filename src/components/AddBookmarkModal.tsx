@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { X, StickyNote } from 'lucide-react';
 
 interface Bookmark {
+  id?: string;
   title: string;
   url: string;
   description?: string;
@@ -17,6 +18,7 @@ interface Bookmark {
   tags: string[];
   favicon?: string;
   folderId?: string;
+  dateAdded?: string;
 }
 
 interface Folder {
@@ -30,9 +32,16 @@ interface AddBookmarkModalProps {
   onClose: () => void;
   onAdd: (bookmark: Bookmark) => void;
   folders: Folder[];
+  editingBookmark?: Bookmark | null;
 }
 
-const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({ isOpen, onClose, onAdd, folders }) => {
+const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onAdd, 
+  folders, 
+  editingBookmark 
+}) => {
   const [formData, setFormData] = useState<Bookmark>({
     title: '',
     url: '',
@@ -44,6 +53,26 @@ const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({ isOpen, onClose, on
   });
   const [tagInput, setTagInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (editingBookmark) {
+      setFormData({
+        ...editingBookmark,
+        id: editingBookmark.id
+      });
+    } else {
+      setFormData({
+        title: '',
+        url: '',
+        description: '',
+        notes: '',
+        tags: [],
+        favicon: '',
+        folderId: undefined
+      });
+    }
+    setTagInput('');
+  }, [editingBookmark, isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,16 +93,18 @@ const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({ isOpen, onClose, on
     onAdd(finalData);
     
     // Reset form
-    setFormData({
-      title: '',
-      url: '',
-      description: '',
-      notes: '',
-      tags: [],
-      favicon: '',
-      folderId: undefined
-    });
-    setTagInput('');
+    if (!editingBookmark) {
+      setFormData({
+        title: '',
+        url: '',
+        description: '',
+        notes: '',
+        tags: [],
+        favicon: '',
+        folderId: undefined
+      });
+      setTagInput('');
+    }
     setIsLoading(false);
     onClose();
   };
@@ -107,9 +138,14 @@ const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({ isOpen, onClose, on
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add New Bookmark</DialogTitle>
+          <DialogTitle>
+            {editingBookmark ? 'Edit Bookmark' : 'Add New Bookmark'}
+          </DialogTitle>
           <DialogDescription>
-            Save a new bookmark to your GitHub repository.
+            {editingBookmark 
+              ? 'Update your bookmark details.' 
+              : 'Save a new bookmark to your GitHub repository.'
+            }
           </DialogDescription>
         </DialogHeader>
         
@@ -167,7 +203,13 @@ const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({ isOpen, onClose, on
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="folder">Folder</Label>
-              <Select value={formData.folderId || 'none'} onValueChange={(value) => setFormData(prev => ({ ...prev, folderId: value === 'none' ? undefined : value }))}>
+              <Select 
+                value={formData.folderId || 'none'} 
+                onValueChange={(value) => setFormData(prev => ({ 
+                  ...prev, 
+                  folderId: value === 'none' ? undefined : value 
+                }))}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a folder" />
                 </SelectTrigger>
@@ -239,7 +281,7 @@ const AddBookmarkModal: React.FC<AddBookmarkModalProps> = ({ isOpen, onClose, on
               className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 w-full sm:w-auto"
               disabled={!formData.title || !formData.url || isLoading}
             >
-              {isLoading ? 'Adding...' : 'Add Bookmark'}
+              {isLoading ? 'Saving...' : editingBookmark ? 'Update Bookmark' : 'Add Bookmark'}
             </Button>
           </DialogFooter>
         </form>

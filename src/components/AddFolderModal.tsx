@@ -1,20 +1,23 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { FolderPlus } from 'lucide-react';
+import { FolderPlus, Edit } from 'lucide-react';
 
 interface Folder {
+  id?: string;
   name: string;
   color: string;
+  dateCreated?: string;
 }
 
 interface AddFolderModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (folder: Folder) => void;
+  editingFolder?: Folder | null;
 }
 
 const colors = [
@@ -23,12 +26,31 @@ const colors = [
   '#EC4899', '#6366F1', '#14B8A6', '#F59E0B'
 ];
 
-const AddFolderModal: React.FC<AddFolderModalProps> = ({ isOpen, onClose, onAdd }) => {
+const AddFolderModal: React.FC<AddFolderModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onAdd, 
+  editingFolder 
+}) => {
   const [formData, setFormData] = useState<Folder>({
     name: '',
     color: colors[0]
   });
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (editingFolder) {
+      setFormData({
+        ...editingFolder,
+        id: editingFolder.id
+      });
+    } else {
+      setFormData({
+        name: '',
+        color: colors[0]
+      });
+    }
+  }, [editingFolder, isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,11 +59,13 @@ const AddFolderModal: React.FC<AddFolderModalProps> = ({ isOpen, onClose, onAdd 
     setIsLoading(true);
     onAdd(formData);
     
-    // Reset form
-    setFormData({
-      name: '',
-      color: colors[0]
-    });
+    // Reset form if not editing
+    if (!editingFolder) {
+      setFormData({
+        name: '',
+        color: colors[0]
+      });
+    }
     setIsLoading(false);
     onClose();
   };
@@ -51,11 +75,14 @@ const AddFolderModal: React.FC<AddFolderModalProps> = ({ isOpen, onClose, onAdd 
       <DialogContent className="sm:max-w-[450px]">
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
-            <FolderPlus className="h-5 w-5" />
-            <span>Create New Folder</span>
+            {editingFolder ? <Edit className="h-5 w-5" /> : <FolderPlus className="h-5 w-5" />}
+            <span>{editingFolder ? 'Edit Folder' : 'Create New Folder'}</span>
           </DialogTitle>
           <DialogDescription>
-            Organize your bookmarks by creating custom folders.
+            {editingFolder 
+              ? 'Update your folder details.'
+              : 'Organize your bookmarks by creating custom folders.'
+            }
           </DialogDescription>
         </DialogHeader>
         
@@ -99,7 +126,7 @@ const AddFolderModal: React.FC<AddFolderModalProps> = ({ isOpen, onClose, onAdd 
               className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
               disabled={!formData.name.trim() || isLoading}
             >
-              {isLoading ? 'Creating...' : 'Create Folder'}
+              {isLoading ? 'Saving...' : editingFolder ? 'Update Folder' : 'Create Folder'}
             </Button>
           </DialogFooter>
         </form>
