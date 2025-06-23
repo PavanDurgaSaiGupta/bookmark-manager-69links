@@ -61,45 +61,38 @@ const Index = () => {
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-  const [gitHubConnected, setGitHubConnected] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'error' | 'disconnected'>('disconnected');
   const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
+
+  // Ensure General folder exists
+  const ensureGeneralFolder = () => {
+    if (!folders.find(f => f.name === 'General')) {
+      const generalFolder: Folder = {
+        id: 'general',
+        name: 'General',
+        color: '#3B82F6',
+        dateCreated: new Date().toISOString().split('T')[0]
+      };
+      return [generalFolder, ...folders];
+    }
+    return folders;
+  };
 
   useEffect(() => {
     const authStatus = localStorage.getItem('6^^9-auth');
     if (authStatus === 'authenticated') {
       setIsAuthenticated(true);
-      initializeGitHubConnection();
+      initializeApp();
     }
   }, []);
 
-  // Auto-sync every 10 seconds
-  useEffect(() => {
-    if (!isAuthenticated || !gitHubConnected) return;
-
-    const syncInterval = setInterval(() => {
-      console.log('Auto-syncing to GitHub...');
-      saveToGitHub(bookmarks, notes, folders, true);
-    }, 10000);
-
-    return () => clearInterval(syncInterval);
-  }, [isAuthenticated, bookmarks, notes, folders, gitHubConnected]);
-
-  const initializeGitHubConnection = async () => {
-    console.log('Initializing GitHub connection...');
-    const connected = await testGitHubConnection();
-    if (connected) {
-      await createFolderStructure();
-      loadDataFromGitHub();
-    }
-  };
-
-  const testGitHubConnection = async () => {
+  const initializeApp = async () => {
+    console.log('Initializing 6^^9 Links app...');
     try {
       setSyncStatus('syncing');
-      console.log('Testing GitHub connection...');
       
+      // Test GitHub connection
       const response = await fetch(`https://api.github.com/repos/PavanDurgaSaiGupta/BOOKMARKSTOOLS`, {
         headers: {
           'Authorization': `token ${GITHUB_TOKEN}`,
@@ -108,66 +101,49 @@ const Index = () => {
       });
       
       if (response.ok) {
-        setGitHubConnected(true);
         setSyncStatus('connected');
         console.log('GitHub connection successful');
+        
+        // Load existing data
+        await loadDataFromGitHub();
+        
         toast({
-          title: "🎉 GitHub Connected Successfully",
-          description: "Repository is now synced and ready to store your bookmarks and notes.",
+          title: "🎉 Connected Successfully",
+          description: "Your bookmarks and notes are now synced with GitHub!",
         });
-        return true;
       } else {
-        console.error('GitHub connection failed:', response.status, await response.text());
-        setGitHubConnected(false);
         setSyncStatus('error');
+        console.error('GitHub connection failed:', response.status);
         toast({
-          title: "GitHub Connection Failed",
-          description: `Failed to connect: ${response.status}. Please check your token and repository.`,
+          title: "Connection Error",
+          description: "Failed to connect to GitHub. Using local storage.",
           variant: "destructive",
         });
-        return false;
+        loadLocalData();
       }
     } catch (error) {
-      console.error('GitHub connection error:', error);
-      setGitHubConnected(false);
+      console.error('Connection error:', error);
       setSyncStatus('error');
       toast({
         title: "Connection Error",
-        description: "Unable to connect to GitHub. Please check your internet connection.",
+        description: "Unable to connect to GitHub. Using local storage.",
         variant: "destructive",
       });
-      return false;
+      loadLocalData();
     }
   };
 
-  const createFolderStructure = async () => {
-    try {
-      console.log('Creating folder structure in GitHub...');
-      
-      // Create bookmarks folder structure
-      const folders = ['bookmarks', 'notes', 'data'];
-      
-      for (const folder of folders) {
-        try {
-          const readmeContent = btoa(`# ${folder.charAt(0).toUpperCase() + folder.slice(1)}\n\nThis folder contains ${folder} data for 6^^9 links application.\n\n## Structure\n- JSON files for data storage\n- HTML exports for browser compatibility\n- Organized by folders and categories\n`);
-          
-          await fetch(`${GITHUB_API_URL}/${folder}/README.md`, {
-            method: 'PUT',
-            headers: {
-              'Authorization': `token ${GITHUB_TOKEN}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              message: `Create ${folder} folder structure`,
-              content: readmeContent,
-            }),
-          });
-        } catch (error) {
-          console.log(`Folder ${folder} may already exist`);
-        }
-      }
-    } catch (error) {
-      console.error('Error creating folder structure:', error);
+  const loadLocalData = () => {
+    const savedBookmarks = localStorage.getItem('6^^9-bookmarks');
+    const savedNotes = localStorage.getItem('6^^9-notes');
+    const savedFolders = localStorage.getItem('6^^9-folders');
+    
+    if (savedBookmarks) setBookmarks(JSON.parse(savedBookmarks));
+    if (savedNotes) setNotes(JSON.parse(savedNotes));
+    if (savedFolders) {
+      setFolders(JSON.parse(savedFolders));
+    } else {
+      setFolders(ensureGeneralFolder());
     }
   };
 
@@ -175,11 +151,10 @@ const Index = () => {
     try {
       console.log('Loading data from GitHub...');
       setIsSyncing(true);
-      setSyncStatus('syncing');
 
       // Load bookmarks
       try {
-        const bookmarksResponse = await fetch(`${GITHUB_API_URL}/data/bookmarks.json`, {
+        const bookmarksResponse = await fetch(`${GITHUB_API_URL}/bookmarks.json`, {
           headers: {
             'Authorization': `token ${GITHUB_TOKEN}`,
             'Accept': 'application/vnd.github.v3+json',
@@ -190,19 +165,19 @@ const Index = () => {
           const bookmarksData = await bookmarksResponse.json();
           const bookmarksContent = JSON.parse(atob(bookmarksData.content));
           setBookmarks(bookmarksContent);
-          console.log('Bookmarks loaded from GitHub:', bookmarksContent.length);
+          console.log('Loaded bookmarks:', bookmarksContent.length);
         } else {
-          console.log('No existing bookmarks file found, starting fresh');
+          console.log('No bookmarks file found, starting fresh');
           setBookmarks([]);
         }
       } catch (error) {
-        console.log('No existing bookmarks file found');
+        console.log('No bookmarks file found');
         setBookmarks([]);
       }
 
       // Load notes
       try {
-        const notesResponse = await fetch(`${GITHUB_API_URL}/data/notes.json`, {
+        const notesResponse = await fetch(`${GITHUB_API_URL}/notes.json`, {
           headers: {
             'Authorization': `token ${GITHUB_TOKEN}`,
             'Accept': 'application/vnd.github.v3+json',
@@ -213,19 +188,19 @@ const Index = () => {
           const notesData = await notesResponse.json();
           const notesContent = JSON.parse(atob(notesData.content));
           setNotes(notesContent);
-          console.log('Notes loaded from GitHub:', notesContent.length);
+          console.log('Loaded notes:', notesContent.length);
         } else {
-          console.log('No existing notes file found, starting fresh');
+          console.log('No notes file found, starting fresh');
           setNotes([]);
         }
       } catch (error) {
-        console.log('No existing notes file found');
+        console.log('No notes file found');
         setNotes([]);
       }
 
       // Load folders
       try {
-        const foldersResponse = await fetch(`${GITHUB_API_URL}/data/folders.json`, {
+        const foldersResponse = await fetch(`${GITHUB_API_URL}/folders.json`, {
           headers: {
             'Authorization': `token ${GITHUB_TOKEN}`,
             'Accept': 'application/vnd.github.v3+json',
@@ -235,59 +210,36 @@ const Index = () => {
         if (foldersResponse.ok) {
           const foldersData = await foldersResponse.json();
           const foldersContent = JSON.parse(atob(foldersData.content));
-          setFolders(foldersContent);
-          console.log('Folders loaded from GitHub:', foldersContent.length);
+          setFolders(ensureGeneralFolder());
         } else {
-          console.log('No existing folders file found, creating default folder');
-          const defaultFolder: Folder = {
-            id: '1',
-            name: 'General',
-            color: '#3B82F6',
-            dateCreated: new Date().toISOString().split('T')[0]
-          };
-          setFolders([defaultFolder]);
+          console.log('No folders file found, creating General folder');
+          setFolders(ensureGeneralFolder());
         }
       } catch (error) {
-        console.log('No existing folders file found, creating default folder');
-        const defaultFolder: Folder = {
-          id: '1',
-          name: 'General',
-          color: '#3B82F6',
-          dateCreated: new Date().toISOString().split('T')[0]
-        };
-        setFolders([defaultFolder]);
+        console.log('No folders file found, creating General folder');
+        setFolders(ensureGeneralFolder());
       }
 
       setLastSyncTime(new Date());
-      setSyncStatus('connected');
-      toast({
-        title: "📂 Data Loaded Successfully",
-        description: "All your bookmarks, notes, and folders have been synced from GitHub.",
-      });
     } catch (error) {
       console.error('Error loading from GitHub:', error);
-      setSyncStatus('error');
-      toast({
-        title: "Load Failed",
-        description: "Failed to load data from GitHub repository.",
-        variant: "destructive",
-      });
     } finally {
       setIsSyncing(false);
     }
   };
 
-  const saveToGitHub = async (bookmarksData: Bookmark[], notesData: Note[], foldersData: Folder[], isAutoSync = false) => {
-    if (!gitHubConnected) {
-      console.log('GitHub not connected, skipping sync');
+  const saveToGitHub = async (bookmarksData: Bookmark[], notesData: Note[], foldersData: Folder[]) => {
+    if (syncStatus === 'error') {
+      console.log('GitHub not connected, saving locally');
+      localStorage.setItem('6^^9-bookmarks', JSON.stringify(bookmarksData));
+      localStorage.setItem('6^^9-notes', JSON.stringify(notesData));
+      localStorage.setItem('6^^9-folders', JSON.stringify(foldersData));
       return;
     }
 
     try {
-      if (!isAutoSync) {
-        setIsSyncing(true);
-        setSyncStatus('syncing');
-      }
+      setIsSyncing(true);
+      setSyncStatus('syncing');
       
       console.log('Saving to GitHub...', { 
         bookmarks: bookmarksData.length, 
@@ -295,37 +247,34 @@ const Index = () => {
         folders: foldersData.length 
       });
 
-      // Get existing file SHAs for updates
-      const getFileSha = async (filepath: string) => {
+      const saveFile = async (filename: string, content: any) => {
+        // Get existing file SHA
+        let sha = null;
         try {
-          const response = await fetch(`${GITHUB_API_URL}/${filepath}`, {
+          const existingResponse = await fetch(`${GITHUB_API_URL}/${filename}`, {
             headers: {
               'Authorization': `token ${GITHUB_TOKEN}`,
               'Accept': 'application/vnd.github.v3+json',
             },
           });
-          if (response.ok) {
-            const data = await response.json();
-            return data.sha;
+          if (existingResponse.ok) {
+            const existingData = await existingResponse.json();
+            sha = existingData.sha;
           }
         } catch (error) {
-          console.log(`No existing ${filepath} found`);
+          console.log(`No existing ${filename} found`);
         }
-        return null;
-      };
 
-      const saveFile = async (filepath: string, content: any, description: string) => {
-        const sha = await getFileSha(filepath);
-        const encodedContent = btoa(JSON.stringify(content, null, 2));
         const payload: any = {
-          message: `${description} - ${new Date().toISOString()}`,
-          content: encodedContent,
+          message: `Update ${filename} - ${new Date().toISOString()}`,
+          content: btoa(JSON.stringify(content, null, 2)),
         };
+        
         if (sha) {
           payload.sha = sha;
         }
 
-        const response = await fetch(`${GITHUB_API_URL}/${filepath}`, {
+        const response = await fetch(`${GITHUB_API_URL}/${filename}`, {
           method: 'PUT',
           headers: {
             'Authorization': `token ${GITHUB_TOKEN}`,
@@ -335,112 +284,60 @@ const Index = () => {
         });
 
         if (!response.ok) {
-          const errorData = await response.text();
-          console.error(`Failed to save ${filepath}:`, errorData);
-          throw new Error(`Failed to save ${filepath}: ${response.status}`);
+          const errorText = await response.text();
+          console.error(`Failed to save ${filename}:`, errorText);
+          throw new Error(`Failed to save ${filename}`);
         }
 
         return response;
       };
 
-      // Save data files in proper structure
-      await Promise.all([
-        saveFile('data/bookmarks.json', bookmarksData, 'Update bookmarks data'),
-        saveFile('data/notes.json', notesData, 'Update notes data'),
-        saveFile('data/folders.json', foldersData, 'Update folders data')
-      ]);
+      // Save JSON files
+      await saveFile('bookmarks.json', bookmarksData);
+      await saveFile('notes.json', notesData);
+      await saveFile('folders.json', foldersData);
 
-      // Create HTML exports for browser compatibility
-      await saveHTMLExports(bookmarksData, notesData, foldersData);
+      // Create HTML export for bookmarks (browser compatible)
+      const htmlBookmarks = generateBookmarksHTML(bookmarksData, foldersData);
+      await saveFile('bookmarks.html', { content: htmlBookmarks });
 
       console.log('Successfully saved all data to GitHub');
       setLastSyncTime(new Date());
       setSyncStatus('connected');
       
-      if (!isAutoSync) {
-        toast({
-          title: "✅ Synced to GitHub",
-          description: "Your data has been saved with proper folder structure and HTML exports.",
-        });
-      }
+      // Also save locally as backup
+      localStorage.setItem('6^^9-bookmarks', JSON.stringify(bookmarksData));
+      localStorage.setItem('6^^9-notes', JSON.stringify(notesData));
+      localStorage.setItem('6^^9-folders', JSON.stringify(foldersData));
+      
+      toast({
+        title: "✅ Sync Successful",
+        description: "All data saved to GitHub repository with proper structure!",
+      });
     } catch (error) {
       console.error('GitHub sync error:', error);
       setSyncStatus('error');
       
-      if (!isAutoSync) {
-        toast({
-          title: "Sync failed",
-          description: "Failed to save to GitHub repository. Please check your connection.",
-          variant: "destructive",
-        });
-      }
-    } finally {
-      if (!isAutoSync) {
-        setIsSyncing(false);
-      }
-    }
-  };
-
-  const saveHTMLExports = async (bookmarksData: Bookmark[], notesData: Note[], foldersData: Folder[]) => {
-    try {
-      // Create HTML bookmarks export (Netscape format for browser compatibility)
-      const htmlBookmarks = generateNetscapeBookmarks(bookmarksData, foldersData);
-      const htmlNotes = generateHTMLNotes(notesData, foldersData);
+      // Save locally as fallback
+      localStorage.setItem('6^^9-bookmarks', JSON.stringify(bookmarksData));
+      localStorage.setItem('6^^9-notes', JSON.stringify(notesData));
+      localStorage.setItem('6^^9-folders', JSON.stringify(foldersData));
       
-      const getFileSha = async (filepath: string) => {
-        try {
-          const response = await fetch(`${GITHUB_API_URL}/${filepath}`, {
-            headers: {
-              'Authorization': `token ${GITHUB_TOKEN}`,
-              'Accept': 'application/vnd.github.v3+json',
-            },
-          });
-          if (response.ok) {
-            const data = await response.json();
-            return data.sha;
-          }
-        } catch (error) {
-          console.log(`No existing ${filepath} found`);
-        }
-        return null;
-      };
-
-      const saveHTMLFile = async (filepath: string, content: string, description: string) => {
-        const sha = await getFileSha(filepath);
-        const encodedContent = btoa(content);
-        const payload: any = {
-          message: `${description} - ${new Date().toISOString()}`,
-          content: encodedContent,
-        };
-        if (sha) {
-          payload.sha = sha;
-        }
-
-        await fetch(`${GITHUB_API_URL}/${filepath}`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `token ${GITHUB_TOKEN}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-      };
-
-      await Promise.all([
-        saveHTMLFile('bookmarks/bookmarks.html', htmlBookmarks, 'Update HTML bookmarks export'),
-        saveHTMLFile('notes/notes.html', htmlNotes, 'Update HTML notes export')
-      ]);
-
-    } catch (error) {
-      console.error('Error saving HTML exports:', error);
+      toast({
+        title: "Sync Error",
+        description: "Failed to sync to GitHub. Data saved locally.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
     }
   };
 
-  const generateNetscapeBookmarks = (bookmarksData: Bookmark[], foldersData: Folder[]) => {
+  const generateBookmarksHTML = (bookmarksData: Bookmark[], foldersData: Folder[]) => {
     const timestamp = Math.floor(Date.now() / 1000);
     
     let html = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
-<!-- This is an automatically generated file. -->
+<!-- 6^^9 Links Bookmarks Export -->
 <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
 <TITLE>6^^9 Links Bookmarks</TITLE>
 <H1>6^^9 Links Bookmarks</H1>
@@ -483,64 +380,15 @@ const Index = () => {
     return html;
   };
 
-  const generateHTMLNotes = (notesData: Note[], foldersData: Folder[]) => {
-    let html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>6^^9 Links Notes</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        .note { border: 1px solid #ddd; margin: 20px 0; padding: 15px; border-radius: 5px; }
-        .note-title { font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
-        .note-meta { color: #666; font-size: 0.9em; margin-bottom: 10px; }
-        .note-content { line-height: 1.6; white-space: pre-wrap; }
-        .folder-header { color: #333; border-bottom: 2px solid #eee; margin: 30px 0 20px 0; padding-bottom: 10px; }
-    </style>
-</head>
-<body>
-    <h1>6^^9 Links Notes Export</h1>
-    <p>Generated on: ${new Date().toLocaleString()}</p>
-`;
-
-    // Group notes by folder
-    const notesByFolder = new Map();
-    notesData.forEach(note => {
-      const folderId = note.folderId || 'general';
-      if (!notesByFolder.has(folderId)) {
-        notesByFolder.set(folderId, []);
-      }
-      notesByFolder.get(folderId).push(note);
-    });
-
-    // Add notes organized by folders
-    notesByFolder.forEach((notes, folderId) => {
-      const folder = foldersData.find(f => f.id === folderId);
-      const folderName = folder ? folder.name : 'General';
-      
-      html += `<h2 class="folder-header">${folderName}</h2>\n`;
-      
-      notes.forEach(note => {
-        html += `<div class="note">
-        <div class="note-title">${note.title}</div>
-        <div class="note-meta">Created: ${note.dateAdded}</div>
-        <div class="note-content">${note.content}</div>
-    </div>\n`;
-      });
-    });
-
-    html += `</body></html>`;
-    return html;
-  };
-
   const handleLogout = () => {
     localStorage.removeItem('6^^9-auth');
+    localStorage.removeItem('6^^9-bookmarks');
+    localStorage.removeItem('6^^9-notes');
+    localStorage.removeItem('6^^9-folders');
     setIsAuthenticated(false);
     setBookmarks([]);
     setNotes([]);
     setFolders([]);
-    setGitHubConnected(false);
     setSyncStatus('disconnected');
     toast({
       title: "Logged out",
@@ -561,7 +409,7 @@ const Index = () => {
     switch (syncStatus) {
       case 'connected': return 'Connected';
       case 'syncing': return 'Syncing...';
-      case 'error': return 'Error';
+      case 'error': return 'Local Only';
       default: return 'Disconnected';
     }
   };
@@ -570,7 +418,7 @@ const Index = () => {
     switch (syncStatus) {
       case 'connected': return <CheckCircle className="w-3 h-3 mr-1" />;
       case 'syncing': return <div className="w-3 h-3 mr-1 animate-spin border border-current border-t-transparent rounded-full" />;
-      case 'error': return <div className="w-3 h-3 mr-1 bg-red-500 rounded-full" />;
+      case 'error': return <div className="w-3 h-3 mr-1 bg-orange-500 rounded-full" />;
       default: return <div className="w-3 h-3 mr-1 bg-gray-400 rounded-full" />;
     }
   };
@@ -595,17 +443,29 @@ const Index = () => {
   const allTags = Array.from(new Set(bookmarks.flatMap(b => b.tags))).sort();
 
   const handleAddBookmark = (newBookmark: Omit<Bookmark, 'id' | 'dateAdded'>) => {
+    // Ensure folder exists or default to general
+    const ensuredFolders = ensureGeneralFolder();
+    setFolders(ensuredFolders);
+    
+    let folderId = newBookmark.folderId;
+    if (folderId && !ensuredFolders.find(f => f.id === folderId)) {
+      folderId = 'general'; // Default to general if folder doesn't exist
+    }
+    
     const bookmark: Bookmark = {
       ...newBookmark,
+      folderId: folderId || 'general',
       id: Date.now().toString(),
       dateAdded: new Date().toISOString().split('T')[0]
     };
+    
     const updatedBookmarks = [bookmark, ...bookmarks];
     setBookmarks(updatedBookmarks);
-    saveToGitHub(updatedBookmarks, notes, folders);
+    saveToGitHub(updatedBookmarks, notes, ensuredFolders);
+    
     toast({
-      title: "📚 Bookmark added",
-      description: "Your bookmark has been saved and synced to GitHub with proper structure.",
+      title: "📚 Bookmark Added",
+      description: "Bookmark saved and synced successfully!",
     });
   };
 
@@ -617,23 +477,35 @@ const Index = () => {
     saveToGitHub(updatedBookmarks, notes, folders);
     setEditingBookmark(null);
     toast({
-      title: "✏️ Bookmark updated",
-      description: "Your bookmark has been updated and synced to GitHub.",
+      title: "✏️ Bookmark Updated",
+      description: "Bookmark updated and synced successfully!",
     });
   };
 
   const handleAddNote = (newNote: Omit<Note, 'id' | 'dateAdded'>) => {
+    // Ensure folder exists or default to general
+    const ensuredFolders = ensureGeneralFolder();
+    setFolders(ensuredFolders);
+    
+    let folderId = newNote.folderId;
+    if (folderId && !ensuredFolders.find(f => f.id === folderId)) {
+      folderId = 'general'; // Default to general if folder doesn't exist
+    }
+    
     const note: Note = {
       ...newNote,
+      folderId: folderId || 'general',
       id: Date.now().toString(),
       dateAdded: new Date().toISOString().split('T')[0]
     };
+    
     const updatedNotes = [note, ...notes];
     setNotes(updatedNotes);
-    saveToGitHub(bookmarks, updatedNotes, folders);
+    saveToGitHub(bookmarks, updatedNotes, ensuredFolders);
+    
     toast({
-      title: "📝 Note added",
-      description: "Your note has been saved and synced to GitHub with proper structure.",
+      title: "📝 Note Added",
+      description: "Note saved and synced successfully!",
     });
   };
 
@@ -647,8 +519,8 @@ const Index = () => {
     setFolders(updatedFolders);
     saveToGitHub(bookmarks, notes, updatedFolders);
     toast({
-      title: "📁 Folder created",
-      description: "Your folder has been created and synced to GitHub.",
+      title: "📁 Folder Created",
+      description: "Folder created and synced successfully!",
     });
   };
 
@@ -660,8 +532,8 @@ const Index = () => {
     saveToGitHub(bookmarks, notes, updatedFolders);
     setEditingFolder(null);
     toast({
-      title: "📁 Folder updated",
-      description: "Your folder has been updated and synced to GitHub.",
+      title: "📁 Folder Updated",
+      description: "Folder updated and synced successfully!",
     });
   };
 
@@ -670,8 +542,8 @@ const Index = () => {
     setBookmarks(updatedBookmarks);
     saveToGitHub(updatedBookmarks, notes, folders);
     toast({
-      title: "🗑️ Bookmark deleted",
-      description: "The bookmark has been removed and synced to GitHub.",
+      title: "🗑️ Bookmark Deleted",
+      description: "Bookmark removed and synced successfully!",
     });
   };
 
@@ -680,18 +552,18 @@ const Index = () => {
     setNotes(updatedNotes);
     saveToGitHub(bookmarks, updatedNotes, folders);
     toast({
-      title: "🗑️ Note deleted",
-      description: "The note has been removed and synced to GitHub.",
+      title: "🗑️ Note Deleted",
+      description: "Note removed and synced successfully!",
     });
   };
 
   const handleDeleteFolder = (id: string) => {
-    // Move bookmarks and notes from deleted folder to no folder
+    // Move bookmarks and notes from deleted folder to general
     const updatedBookmarks = bookmarks.map(b => 
-      b.folderId === id ? { ...b, folderId: undefined } : b
+      b.folderId === id ? { ...b, folderId: 'general' } : b
     );
     const updatedNotes = notes.map(n => 
-      n.folderId === id ? { ...n, folderId: undefined } : n
+      n.folderId === id ? { ...n, folderId: 'general' } : n
     );
     const updatedFolders = folders.filter(f => f.id !== id);
     
@@ -701,8 +573,8 @@ const Index = () => {
     saveToGitHub(updatedBookmarks, updatedNotes, updatedFolders);
     
     toast({
-      title: "🗑️ Folder deleted",
-      description: "The folder has been deleted and items moved to general folder.",
+      title: "🗑️ Folder Deleted",
+      description: "Folder deleted, items moved to General folder.",
     });
   };
 
@@ -716,7 +588,7 @@ const Index = () => {
         bookmark.description || '',
         bookmark.notes || '',
         bookmark.tags.join(';'),
-        folders.find(f => f.id === bookmark.folderId)?.name || '',
+        folders.find(f => f.id === bookmark.folderId)?.name || 'General',
         bookmark.dateAdded
       ]),
       ...notes.map(note => [
@@ -726,7 +598,7 @@ const Index = () => {
         '',
         '',
         '',
-        folders.find(f => f.id === note.folderId)?.name || '',
+        folders.find(f => f.id === note.folderId)?.name || 'General',
         note.dateAdded
       ])
     ].map(row => row.map(field => `"${field}"`).join(',')).join('\n');
@@ -766,7 +638,7 @@ const Index = () => {
                 {getStatusIcon()}
                 {getStatusText()}
               </div>
-              {lastSyncTime && gitHubConnected && (
+              {lastSyncTime && syncStatus === 'connected' && (
                 <div className="hidden lg:block text-xs text-muted-foreground">
                   Last sync: {lastSyncTime.toLocaleTimeString()}
                 </div>
@@ -917,24 +789,26 @@ const Index = () => {
                           {folderItemCount}
                         </Badge>
                       </Button>
-                      <div className="opacity-0 group-hover:opacity-100 flex space-x-1 ml-2 transition-opacity duration-200">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditingFolder(folder)}
-                          className="h-8 w-8 p-0 hover:scale-110 transition-all duration-200"
-                        >
-                          <Edit className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteFolder(folder.id)}
-                          className="h-8 w-8 p-0 hover:scale-110 transition-all duration-200 text-red-500 hover:text-red-700"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
+                      {folder.name !== 'General' && (
+                        <div className="opacity-0 group-hover:opacity-100 flex space-x-1 ml-2 transition-opacity duration-200">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingFolder(folder)}
+                            className="h-8 w-8 p-0 hover:scale-110 transition-all duration-200"
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteFolder(folder.id)}
+                            className="h-8 w-8 p-0 hover:scale-110 transition-all duration-200 text-red-500 hover:text-red-700"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
