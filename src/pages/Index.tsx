@@ -83,40 +83,43 @@ const Index = () => {
     const authStatus = localStorage.getItem('6^^9-auth');
     if (authStatus === 'authenticated') {
       setIsAuthenticated(true);
+      // Force GitHub connection on page load
       initializeApp();
     }
   }, []);
 
   const initializeApp = async () => {
-    console.log('Initializing 6^^9 Links app...');
+    console.log('Initializing 6^^9 Links app with GitHub connection...');
     try {
       setSyncStatus('syncing');
       
-      // Test GitHub connection
+      // Test GitHub connection with enhanced error handling
       const response = await fetch(`https://api.github.com/repos/PavanDurgaSaiGupta/BOOKMARKSTOOLS`, {
         headers: {
           'Authorization': `token ${GITHUB_TOKEN}`,
           'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': '6^^9-Links-App',
         },
       });
       
       if (response.ok) {
         setSyncStatus('connected');
-        console.log('GitHub connection successful');
+        console.log('✅ GitHub connection successful');
         
-        // Load existing data
+        // Load existing data from GitHub
         await loadDataFromGitHub();
         
         toast({
           title: "🎉 Connected Successfully",
-          description: "Your bookmarks and notes are now synced with GitHub!",
+          description: "Your bookmarks and notes are now synced with GitHub repository!",
         });
       } else {
+        const errorData = await response.json();
+        console.error('GitHub connection failed:', response.status, errorData);
         setSyncStatus('error');
-        console.error('GitHub connection failed:', response.status);
         toast({
-          title: "Connection Error",
-          description: "Failed to connect to GitHub. Using local storage.",
+          title: "⚠️ GitHub Connection Failed",
+          description: "Unable to connect to GitHub. Check your token permissions.",
           variant: "destructive",
         });
         loadLocalData();
@@ -126,7 +129,7 @@ const Index = () => {
       setSyncStatus('error');
       toast({
         title: "Connection Error",
-        description: "Unable to connect to GitHub. Using local storage.",
+        description: "Unable to connect to GitHub. Using local storage as fallback.",
         variant: "destructive",
       });
       loadLocalData();
@@ -230,10 +233,15 @@ const Index = () => {
 
   const saveToGitHub = async (bookmarksData: Bookmark[], notesData: Note[], foldersData: Folder[]) => {
     if (syncStatus === 'error') {
-      console.log('GitHub not connected, saving locally');
+      console.log('GitHub not connected, saving locally only');
       localStorage.setItem('6^^9-bookmarks', JSON.stringify(bookmarksData));
       localStorage.setItem('6^^9-notes', JSON.stringify(notesData));
       localStorage.setItem('6^^9-folders', JSON.stringify(foldersData));
+      toast({
+        title: "⚠️ Local Save Only",
+        description: "Data saved locally. GitHub sync unavailable.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -248,13 +256,13 @@ const Index = () => {
       });
 
       const saveFile = async (filename: string, content: any) => {
-        // Get existing file SHA
         let sha = null;
         try {
           const existingResponse = await fetch(`${GITHUB_API_URL}/${filename}`, {
             headers: {
               'Authorization': `token ${GITHUB_TOKEN}`,
               'Accept': 'application/vnd.github.v3+json',
+              'User-Agent': '6^^9-Links-App',
             },
           });
           if (existingResponse.ok) {
@@ -262,12 +270,12 @@ const Index = () => {
             sha = existingData.sha;
           }
         } catch (error) {
-          console.log(`No existing ${filename} found`);
+          console.log(`No existing ${filename} found, creating new file`);
         }
 
         const payload: any = {
           message: `Update ${filename} - ${new Date().toISOString()}`,
-          content: btoa(JSON.stringify(content, null, 2)),
+          content: typeof content === 'string' ? btoa(content) : btoa(JSON.stringify(content, null, 2)),
         };
         
         if (sha) {
@@ -279,6 +287,7 @@ const Index = () => {
           headers: {
             'Authorization': `token ${GITHUB_TOKEN}`,
             'Content-Type': 'application/json',
+            'User-Agent': '6^^9-Links-App',
           },
           body: JSON.stringify(payload),
         });
@@ -292,16 +301,15 @@ const Index = () => {
         return response;
       };
 
-      // Save JSON files
-      await saveFile('bookmarks.json', bookmarksData);
-      await saveFile('notes.json', notesData);
-      await saveFile('folders.json', foldersData);
+      // Save all files to GitHub
+      await Promise.all([
+        saveFile('bookmarks.json', bookmarksData),
+        saveFile('notes.json', notesData),
+        saveFile('folders.json', foldersData),
+        saveFile('bookmarks.html', generateBookmarksHTML(bookmarksData, foldersData))
+      ]);
 
-      // Create HTML export for bookmarks (browser compatible)
-      const htmlBookmarks = generateBookmarksHTML(bookmarksData, foldersData);
-      await saveFile('bookmarks.html', { content: htmlBookmarks });
-
-      console.log('Successfully saved all data to GitHub');
+      console.log('✅ Successfully saved all data to GitHub');
       setLastSyncTime(new Date());
       setSyncStatus('connected');
       
@@ -312,7 +320,7 @@ const Index = () => {
       
       toast({
         title: "✅ Sync Successful",
-        description: "All data saved to GitHub repository with proper structure!",
+        description: "All data successfully synced to GitHub repository!",
       });
     } catch (error) {
       console.error('GitHub sync error:', error);
@@ -324,8 +332,8 @@ const Index = () => {
       localStorage.setItem('6^^9-folders', JSON.stringify(foldersData));
       
       toast({
-        title: "Sync Error",
-        description: "Failed to sync to GitHub. Data saved locally.",
+        title: "❌ Sync Failed",
+        description: "GitHub sync failed. Data saved locally only.",
         variant: "destructive",
       });
     } finally {

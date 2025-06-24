@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -22,11 +21,15 @@ const AuthModal: React.FC<AuthModalProps> = ({ onAuthenticate }) => {
 
     if (password === '202069') {
       localStorage.setItem('6^^9-auth', 'authenticated');
-      onAuthenticate();
       toast({
         title: "Welcome to 6^^9 links",
-        description: "Authentication successful!",
+        description: "Authentication successful! Connecting to GitHub...",
       });
+      
+      // Trigger page reload to ensure proper GitHub connection
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } else {
       toast({
         title: "Authentication failed",
