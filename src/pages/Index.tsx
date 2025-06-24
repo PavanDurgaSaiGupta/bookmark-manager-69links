@@ -39,9 +39,9 @@ interface Folder {
   dateCreated: string;
 }
 
-// GitHub configuration
+// GitHub configuration with updated token
 const GITHUB_REPO = 'https://github.com/PavanDurgaSaiGupta/BOOKMARKSTOOLS';
-const GITHUB_TOKEN = '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';
+const GITHUB_TOKEN = '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';
 const GITHUB_API_URL = 'https://api.github.com/repos/PavanDurgaSaiGupta/BOOKMARKSTOOLS/contents';
 
 const Index = () => {
@@ -89,7 +89,7 @@ const Index = () => {
   }, []);
 
   const initializeApp = async () => {
-    console.log('Initializing 6^^9 Links app with GitHub connection...');
+    console.log('🚀 Initializing 6^^9 Links with updated GitHub token...');
     try {
       setSyncStatus('syncing');
       
@@ -104,28 +104,28 @@ const Index = () => {
       
       if (response.ok) {
         setSyncStatus('connected');
-        console.log('✅ GitHub connection successful');
+        console.log('✅ GitHub connection successful with new token!');
         
         // Load existing data from GitHub
         await loadDataFromGitHub();
         
         toast({
-          title: "🎉 Connected Successfully",
-          description: "Your bookmarks and notes are now synced with GitHub repository!",
+          title: "🎉 GitHub Connected Successfully!",
+          description: "Your bookmarks and notes are now synced with GitHub repository using the updated token!",
         });
       } else {
         const errorData = await response.json();
-        console.error('GitHub connection failed:', response.status, errorData);
+        console.error('❌ GitHub connection failed:', response.status, errorData);
         setSyncStatus('error');
         toast({
           title: "⚠️ GitHub Connection Failed",
-          description: "Unable to connect to GitHub. Check your token permissions.",
+          description: `Unable to connect to GitHub: ${errorData.message}. Please check your token permissions.`,
           variant: "destructive",
         });
         loadLocalData();
       }
     } catch (error) {
-      console.error('Connection error:', error);
+      console.error('💥 Connection error:', error);
       setSyncStatus('error');
       toast({
         title: "Connection Error",
