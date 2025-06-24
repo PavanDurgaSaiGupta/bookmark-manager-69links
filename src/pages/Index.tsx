@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Github, Grid, List, ExternalLink, Trash2, FolderPlus, Folder, Moon, Sun, Download, StickyNote, FileText, LogOut, Edit, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -39,9 +40,9 @@ interface Folder {
   dateCreated: string;
 }
 
-// GitHub configuration with updated token
+// GitHub configuration with latest token
 const GITHUB_REPO = 'https://github.com/PavanDurgaSaiGupta/BOOKMARKSTOOLS';
-const GITHUB_TOKEN = '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';
+const GITHUB_TOKEN = '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';
 const GITHUB_API_URL = 'https://api.github.com/repos/PavanDurgaSaiGupta/BOOKMARKSTOOLS/contents';
 
 const Index = () => {
@@ -89,7 +90,7 @@ const Index = () => {
   }, []);
 
   const initializeApp = async () => {
-    console.log('🚀 Initializing 6^^9 Links with updated GitHub token...');
+    console.log('🚀 Initializing 6^^9 Links with latest GitHub token...');
     try {
       setSyncStatus('syncing');
       
@@ -104,14 +105,14 @@ const Index = () => {
       
       if (response.ok) {
         setSyncStatus('connected');
-        console.log('✅ GitHub connection successful with new token!');
+        console.log('✅ GitHub connection successful with latest token!');
         
         // Load existing data from GitHub
         await loadDataFromGitHub();
         
         toast({
           title: "🎉 GitHub Connected Successfully!",
-          description: "Your bookmarks and notes are now synced with GitHub repository using the updated token!",
+          description: "Your bookmarks and notes are now synced with GitHub repository using the latest token!",
         });
       } else {
         const errorData = await response.json();
