@@ -117,6 +117,10 @@
     animation: scaleIn 0.2s ease-out;
   }
 
+  .animate-beat {
+    animation: beat 1.2s ease-in-out infinite;
+  }
+
   .backdrop-blur-glass {
     backdrop-filter: blur(12px) saturate(180%);
     background-color: rgba(255, 255, 255, 0.8);
@@ -157,6 +161,21 @@
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes beat {
+  0%, 100% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  75% {
+    transform: scale(1.15);
   }
 }
 
